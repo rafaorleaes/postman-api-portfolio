@@ -1,0 +1,8 @@
+# Dependencias
+node_modules/
+
+# Relatorios gerados pela execucao (o .gitkeep mantem a pasta no repo)
+reports/*.html
+reports/*.xml
+reports/*.json
+!reports/.gitkeep

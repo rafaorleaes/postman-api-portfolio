@@ -1,0 +1,47 @@
+name: API Tests (Newman)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Monitoramento diario as 08:00 UTC — pega quebra de contrato mesmo sem commit
+    - cron: '0 8 * * *'
+
+jobs:
+  newman:
+    name: Executa a suite de API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instala dependencias
+        run: npm ci
+
+      - name: Roda a suite (cli + junit + html)
+        run: npm run test:ci
+
+      - name: Publica relatorio HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-html-report
+          path: reports/report.html
+          if-no-files-found: warn
+
+      - name: Publica resultados JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: newman-junit-results
+          path: reports/junit.xml
+          if-no-files-found: warn

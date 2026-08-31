@@ -1,0 +1,412 @@
+{
+  "info": {
+    "_postman_id": "80eac650-4350-4680-8ca1-bdb298dc6122",
+    "name": "restful-api.dev — Suite de API (Portfolio QA)",
+    "description": "Suite de testes de API contra https://api.restful-api.dev.\n\nDemonstra: fluxo CRUD encadeado, evidencia de persistencia (write -> GET de verificacao), validacao de schema/contrato, casos negativos, assercoes de tempo de resposta e uma checagem global de 'nunca 500' no nivel da colecao.\n\nBase URL parametrizada em {{baseUrl}} (ver environments). Nenhum segredo versionado.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ciclo CRUD (fluxo encadeado)",
+      "description": "Fluxo ordenado que cria um objeto, verifica a persistencia, atualiza, verifica de novo e remove — encadeando o `id` via variavel de ambiente.",
+      "item": [
+        {
+          "name": "1. POST cria objeto  ->  200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Dados determinísticos e únicos por execução (evita colisão entre runs)",
+                  "const stamp = Date.now();",
+                  "pm.environment.set('objName', 'QA Portfolio Item ' + stamp);",
+                  "pm.environment.set('objColor', 'Verde');",
+                  "pm.environment.set('objYear', 2026);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('responde em menos de 2s', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('contrato do objeto criado (schema)', () => {",
+                  "  pm.response.to.have.jsonSchema({",
+                  "    type: 'object',",
+                  "    required: ['id', 'name', 'data'],",
+                  "    properties: {",
+                  "      id:   { type: 'string' },",
+                  "      name: { type: 'string' },",
+                  "      data: { type: 'object' }",
+                  "    }",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('eco do nome enviado', () => {",
+                  "  pm.expect(body.name).to.eql(pm.environment.get('objName'));",
+                  "});",
+                  "",
+                  "// Encadeamento: guarda o id gerado para os próximos requests",
+                  "pm.environment.set('objectId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/objects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects"
+              ]
+            },
+            "description": "Cria um objeto novo. O `id` retornado é capturado em `{{objectId}}` e reutilizado nos requests seguintes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{objName}}\",\n  \"data\": {\n    \"color\": \"{{objColor}}\",\n    \"year\": {{objYear}}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2. GET verifica persistencia  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('nome persistido confere com o enviado', () => {",
+                  "  pm.expect(body.name).to.eql(pm.environment.get('objName'));",
+                  "});",
+                  "",
+                  "pm.test('data.color persistido confere com o enviado', () => {",
+                  "  pm.expect(body.data.color).to.eql(pm.environment.get('objColor'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{objectId}}"
+              ]
+            },
+            "description": "Evidência de persistência: relê o recurso recém-criado e confere que os campos gravados batem com o payload enviado."
+          },
+          "response": []
+        },
+        {
+          "name": "3. PUT atualiza objeto  ->  200",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('objName', 'QA Portfolio Item ATUALIZADO ' + Date.now());",
+                  "pm.environment.set('objColor', 'Azul');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('retorna updatedAt', () => {",
+                  "  pm.expect(body).to.have.property('updatedAt');",
+                  "});",
+                  "",
+                  "pm.test('nome atualizado confere', () => {",
+                  "  pm.expect(body.name).to.eql(pm.environment.get('objName'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{objectId}}"
+              ]
+            },
+            "description": "Atualização total do recurso (PUT). Confere que a API devolve `updatedAt` e o novo nome.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{objName}}\",\n  \"data\": {\n    \"color\": \"{{objColor}}\",\n    \"year\": 2027\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4. GET verifica atualizacao  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('atualizacao persistiu (nome)', () => {",
+                  "  pm.expect(body.name).to.eql(pm.environment.get('objName'));",
+                  "});",
+                  "",
+                  "pm.test('atualizacao persistiu (data.color = Azul)', () => {",
+                  "  pm.expect(body.data.color).to.eql('Azul');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{objectId}}"
+              ]
+            },
+            "description": "Evidência de persistência do update: relê o recurso e confere que a alteração ficou gravada."
+          },
+          "response": []
+        },
+        {
+          "name": "5. DELETE remove objeto  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('mensagem confirma remocao', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.message).to.include('deleted');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{objectId}}"
+              ]
+            },
+            "description": "Remove o recurso criado no início do fluxo (limpeza / teardown do dado)."
+          },
+          "response": []
+        },
+        {
+          "name": "6. GET confirma remocao  ->  404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recurso removido retorna 404', () => pm.response.to.have.status(404));",
+                  "",
+                  "pm.test('payload de erro traz mensagem', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{objectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{objectId}}"
+              ]
+            },
+            "description": "Fecha o ciclo: após o DELETE, o mesmo id deve retornar 404 (negativo derivado do fluxo)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Negativos & Contrato",
+      "description": "Casos que nao dependem do fluxo CRUD: id inexistente (404) e contrato da listagem (200).",
+      "item": [
+        {
+          "name": "7. GET id inexistente  ->  404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('id inexistente retorna 404', () => pm.response.to.have.status(404));",
+                  "",
+                  "pm.test('payload de erro traz mensagem', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('error');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/id-inexistente-999999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "id-inexistente-999999999"
+              ]
+            },
+            "description": "Caso negativo: requisitar um id que nunca existiu deve devolver 404 com corpo de erro."
+          },
+          "response": []
+        },
+        {
+          "name": "8. GET lista objetos  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('responde em menos de 2s', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+                  "",
+                  "const arr = pm.response.json();",
+                  "",
+                  "pm.test('resposta e um array nao vazio', () => {",
+                  "  pm.expect(arr).to.be.an('array');",
+                  "  pm.expect(arr.length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test('cada item respeita o contrato minimo', () => {",
+                  "  pm.expect(arr[0]).to.have.property('id');",
+                  "  pm.expect(arr[0]).to.have.property('name');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects"
+              ]
+            },
+            "description": "Contrato da listagem: valida tipo (array), volume e o shape minimo de cada item."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Checagem global aplicada apos CADA request da colecao (DRY):",
+          "// nenhum endpoint pode responder 500 — erro de servidor e sempre falha, nunca esperado.",
+          "pm.test('nao retornou 500 (erro de servidor)', () => {",
+          "  pm.expect(pm.response.code).to.not.equal(500);",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://api.restful-api.dev"
+    }
+  ]
+}

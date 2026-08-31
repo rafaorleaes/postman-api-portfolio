@@ -1,0 +1,22 @@
+{
+  "name": "postman-api-portfolio",
+  "version": "1.0.0",
+  "description": "Suite de testes de API em Postman/Newman com CI no GitHub Actions — projeto de portfolio QA.",
+  "scripts": {
+    "test": "newman run collections/restful-api-crud.postman_collection.json -e environments/dev.postman_environment.json --reporters cli",
+    "test:ci": "newman run collections/restful-api-crud.postman_collection.json -e environments/ci.postman_environment.json --reporters cli,junit,htmlextra --reporter-junit-export reports/junit.xml --reporter-htmlextra-export reports/report.html"
+  },
+  "keywords": [
+    "postman",
+    "newman",
+    "api-testing",
+    "qa",
+    "quality-assurance",
+    "portfolio"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "newman": "^6.2.2",
+    "newman-reporter-htmlextra": "^1.22.5"
+  }
+}
