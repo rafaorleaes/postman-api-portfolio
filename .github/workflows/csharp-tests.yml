@@ -1,0 +1,62 @@
+name: API Tests (C# / xUnit)
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ 'csharp-api-tests/**' ]
+  pull_request:
+    paths: [ 'csharp-api-tests/**' ]
+  workflow_dispatch:
+  schedule:
+    # Roda a suite completa (com chamadas reais) uma vez por dia
+    - cron: '0 9 * * *'
+
+jobs:
+  build:
+    name: Compila a suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaura dependencias
+        run: dotnet restore
+        working-directory: csharp-api-tests
+
+      - name: Compila (sem chamar API nenhuma)
+        run: dotnet build --no-restore
+        working-directory: csharp-api-tests
+
+  test:
+    name: Roda a suite completa (chamadas reais)
+    runs-on: ubuntu-latest
+    # restful-api.dev tem limite de 50 requests/24h por IP e esse budget e
+    # compartilhado com o workflow do Newman (ver comentario em newman.yml).
+    # Por isso a suite completa (que soma ~17 requests) so roda no cron diario
+    # ou quando disparada manualmente — nao em todo push/PR.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restaura dependencias
+        run: dotnet restore
+        working-directory: csharp-api-tests
+
+      - name: Roda os testes
+        run: dotnet test --no-restore --logger "trx;LogFileName=test-results.trx"
+        working-directory: csharp-api-tests
+
+      - name: Publica resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xunit-test-results
+          path: csharp-api-tests/**/TestResults/*.trx
+          if-no-files-found: warn

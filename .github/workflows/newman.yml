@@ -9,6 +9,10 @@ on:
     # Monitoramento diario as 08:00 UTC — pega quebra de contrato mesmo sem commit
     - cron: '0 8 * * *'
 
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   newman:
     name: Executa a suite de API
@@ -27,15 +31,25 @@ jobs:
       - name: Instala dependencias
         run: npm ci
 
-      - name: Roda a suite (cli + junit + html)
+      - name: Roda a suite principal (cli + junit + html)
         run: npm run test:ci
 
-      - name: Publica relatorio HTML
+      # restful-api.dev tem limite de 50 requests/24h por IP. A suite principal
+      # ja consome ~8 por execucao; o folder Data-Driven soma outras ~9 (3 linhas
+      # do CSV x 3 requests). Para nao estourar a cota em todo push/PR, essa etapa
+      # roda so no cron diario ou quando disparada manualmente.
+      - name: Roda a suite data-driven (CSV, cli + junit + html)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: npm run test:data:ci
+
+      - name: Publica relatorios HTML
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: newman-html-report
-          path: reports/report.html
+          path: |
+            reports/report.html
+            reports/report-data.html
           if-no-files-found: warn
 
       - name: Publica resultados JUnit
@@ -43,5 +57,53 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: newman-junit-results
-          path: reports/junit.xml
+          path: |
+            reports/junit.xml
+            reports/junit-data.xml
           if-no-files-found: warn
+
+  pages:
+    name: Publica relatorio no GitHub Pages
+    needs: newman
+    if: always() && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Baixa os relatorios HTML do job anterior
+        uses: actions/download-artifact@v4
+        with:
+          name: newman-html-report
+          path: reports
+
+      - name: Monta o site (index + relatorios)
+        run: |
+          mkdir -p site
+          cp reports/report.html site/index.html
+          # report-data.html so existe nas execucoes de schedule/workflow_dispatch
+          # (ver comentario no job "newman" sobre a cota de 50 req/24h da restful-api.dev).
+          if [ -f reports/report-data.html ]; then
+            cp reports/report-data.html site/data-driven.html
+          fi
+          cat > site/README.txt <<'EOF'
+          Gerado automaticamente pelo workflow newman.yml — nao editar a mao.
+          EOF
+
+      - name: Configura o GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Envia artefato do Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -4,7 +4,9 @@
   "description": "Suite de testes de API em Postman/Newman com CI no GitHub Actions — projeto de portfolio QA.",
   "scripts": {
     "test": "newman run collections/restful-api-crud.postman_collection.json -e environments/dev.postman_environment.json --reporters cli",
-    "test:ci": "newman run collections/restful-api-crud.postman_collection.json -e environments/ci.postman_environment.json --reporters cli,junit,htmlextra --reporter-junit-export reports/junit.xml --reporter-htmlextra-export reports/report.html"
+    "test:ci": "newman run collections/restful-api-crud.postman_collection.json -e environments/ci.postman_environment.json --reporters cli,junit,htmlextra --reporter-junit-export reports/junit.xml --reporter-htmlextra-export reports/report.html",
+    "test:data": "newman run collections/restful-api-crud.postman_collection.json -e environments/dev.postman_environment.json -d data/objects.csv --folder \"Data-Driven (CSV)\" --reporters cli",
+    "test:data:ci": "newman run collections/restful-api-crud.postman_collection.json -e environments/ci.postman_environment.json -d data/objects.csv --folder \"Data-Driven (CSV)\" --reporters cli,junit,htmlextra --reporter-junit-export reports/junit-data.xml --reporter-htmlextra-export reports/report-data.html"
   },
   "keywords": [
     "postman",

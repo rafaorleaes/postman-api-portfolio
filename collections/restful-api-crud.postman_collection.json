@@ -386,6 +386,380 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "Autenticacao (401 - dummyjson.com)",
+      "description": "restful-api.dev nao tem camada de auth, entao esses casos rodam contra https://dummyjson.com (API publica com login real via JWT). Cobre login feliz, credenciais invalidas (400) e acesso sem token / com token invalido (401).\n\nNota honesta sobre 403/IDOR: um 403 de autorizacao (token valido mas sem permissao) ou um IDOR (acessar recurso privado de outro usuario) exige um backend com ownership real por usuario — nenhuma API publica gratuita disponibiliza isso sem uma conta propria com dados privados. O padrao de teste abaixo (capturar token, reusar em requests protegidos) se estende para esses casos sem mudanca estrutural assim que houver um backend assim disponivel.",
+      "item": [
+        {
+          "name": "9. GET /auth/me sem token -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('sem token retorna 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('payload de erro traz mensagem', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{authBaseUrl}}/auth/me",
+              "host": [
+                "{{authBaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Recurso protegido acessado sem header Authorization: deve devolver 401. Roda antes do login desta pasta para nao herdar o cookie de sessao que o dummyjson define no login."
+          },
+          "response": []
+        },
+        {
+          "name": "10. GET /auth/me com token invalido -> 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('token invalido retorna 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('payload de erro traz mensagem', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer token-invalido-abc123"
+              }
+            ],
+            "url": {
+              "raw": "{{authBaseUrl}}/auth/me",
+              "host": [
+                "{{authBaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Recurso protegido acessado com um token bem-formado, porem invalido: deve devolver 401 (nao 200)."
+          },
+          "response": []
+        },
+        {
+          "name": "11. POST login valido -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('contrato do login (schema)', () => {",
+                  "  pm.response.to.have.jsonSchema({",
+                  "    type: 'object',",
+                  "    required: ['accessToken', 'username'],",
+                  "    properties: {",
+                  "      accessToken: { type: 'string' },",
+                  "      username:    { type: 'string' }",
+                  "    }",
+                  "  });",
+                  "});",
+                  "",
+                  "// Guarda o token para os proximos requests protegidos",
+                  "pm.environment.set('authToken', body.accessToken);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authBaseUrl}}/auth/login",
+              "host": [
+                "{{authBaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Login com credenciais validas de um usuario de teste publico do dummyjson. Guarda o `accessToken` em `{{authToken}}`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"emilys\",\n  \"password\": \"emilyspass\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "12. POST login invalido -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('credenciais invalidas retornam 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('payload de erro traz mensagem', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body).to.have.property('message');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{authBaseUrl}}/auth/login",
+              "host": [
+                "{{authBaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Caso negativo: senha errada para um usuario existente deve devolver 400 com corpo de erro (nao vaza se o usuario existe ou nao alem disso).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"emilys\",\n  \"password\": \"senha-errada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "13. GET /auth/me com token valido -> 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('retorna o usuario autenticado (controle positivo)', () => {",
+                  "  pm.expect(body.username).to.eql('emilys');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{authBaseUrl}}/auth/me",
+              "host": [
+                "{{authBaseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            },
+            "description": "Controle positivo: com o token valido capturado no login, o mesmo endpoint que barrou os dois casos anteriores agora responde 200. Prova que o 401 acima e sobre autenticacao, nao instabilidade da API."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Data-Driven (CSV)",
+      "description": "Mesma logica de criar -> verificar persistencia -> limpar do fluxo principal, mas parametrizada por um arquivo de dados (data/objects.csv) via `newman -d`. Cada linha do CSV vira uma iteracao com valores diferentes de name/color/year, sem editar a colecao. Rodar isolado com `npm run test:data`.",
+      "item": [
+        {
+          "name": "DDT 1. POST cria objeto (via CSV)  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('contrato do objeto criado (schema)', () => {",
+                  "  pm.response.to.have.jsonSchema({",
+                  "    type: 'object',",
+                  "    required: ['id', 'name', 'data'],",
+                  "    properties: {",
+                  "      id:   { type: 'string' },",
+                  "      name: { type: 'string' },",
+                  "      data: { type: 'object' }",
+                  "    }",
+                  "  });",
+                  "});",
+                  "",
+                  "pm.test('eco do nome vindo do CSV', () => {",
+                  "  pm.expect(body.name).to.eql(pm.variables.get('name'));",
+                  "});",
+                  "",
+                  "pm.environment.set('ddtObjectId', body.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/objects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects"
+              ]
+            },
+            "description": "Cria um objeto usando os valores da linha atual do CSV ({{name}}, {{color}}, {{year}}).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{name}}\",\n  \"data\": {\n    \"color\": \"{{color}}\",\n    \"year\": {{year}}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "DDT 2. GET verifica persistencia (via CSV)  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const body = pm.response.json();",
+                  "",
+                  "pm.test('nome persistido confere com o CSV', () => {",
+                  "  pm.expect(body.name).to.eql(pm.variables.get('name'));",
+                  "});",
+                  "",
+                  "pm.test('data.color persistido confere com o CSV', () => {",
+                  "  pm.expect(body.data.color).to.eql(pm.variables.get('color'));",
+                  "});",
+                  "",
+                  "pm.test('data.year persistido confere com o CSV', () => {",
+                  "  pm.expect(String(body.data.year)).to.eql(String(pm.variables.get('year')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{ddtObjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{ddtObjectId}}"
+              ]
+            },
+            "description": "Re-le o objeto criado nesta iteracao e confere que os valores gravados batem com a linha do CSV."
+          },
+          "response": []
+        },
+        {
+          "name": "DDT 3. DELETE limpeza (via CSV)  ->  200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/objects/{{ddtObjectId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "objects",
+                "{{ddtObjectId}}"
+              ]
+            },
+            "description": "Remove o objeto criado nesta iteracao (teardown por linha do CSV)."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "event": [
@@ -407,6 +781,23 @@
     {
       "key": "baseUrl",
       "value": "https://api.restful-api.dev"
+    },
+    {
+      "key": "authBaseUrl",
+      "value": "https://dummyjson.com"
+    },
+    {
+      "key": "name",
+      "value": "DDT Item Padrao",
+      "description": "Fallback para a pasta Data-Driven quando rodada sem -d data/objects.csv. Dado de iteracao (--iteration-data) tem precedencia sobre isto."
+    },
+    {
+      "key": "color",
+      "value": "Cinza"
+    },
+    {
+      "key": "year",
+      "value": 2020
     }
   ]
 }
